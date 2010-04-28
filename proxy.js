@@ -1,3 +1,11 @@
+/*
+** Peteris Krumins (peter@catonmat.net)
+** http://www.catonmat.net  --  good coders code, great reuse
+**
+** A simple proxy server written in node.js.
+**
+*/
+
 var http = require('http');
 var sys  = require('sys');
 var fs   = require('fs');
