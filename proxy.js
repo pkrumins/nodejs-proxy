@@ -10,49 +10,54 @@ var http = require('http');
 var sys  = require('sys');
 var fs   = require('fs');
 
+var config = require('./config').config;
+
 var blacklist = [];
 var iplist    = [];
 
-fs.watchFile('./blacklist', function(c,p) { update_blacklist(); });
-fs.watchFile('./iplist', function(c,p) { update_iplist(); });
+fs.watchFile(config.black_list,    function(c,p) { update_blacklist(); });
+fs.watchFile(config.allow_ip_list, function(c,p) { update_iplist(); });
 
-function update_blacklist() {
-  fs.stat('./blacklist', function(err, stats) {
+function update_list(msg, file, mapf, collectorf) {
+  fs.stat(file, function(err, stats) {
     if (!err) {
-      sys.log("Updating blacklist.");
-      blacklist = fs.readFileSync('./blacklist').split('\n')
-                  .filter(function(rx) { return rx.length })
-                  .map(function(rx) { return RegExp(rx) });
+      sys.log(msg);
+      collectorf(fs.readFileSync(file)
+                   .split('\n')
+                   .filter(function(rx) { return rx.length })
+                   .map(mapf));
+    }
+    else {
+      sys.log("File '" + file + "' was not found.");
+      collectorf([]);
     }
   });
+}
+
+function update_blacklist() {
+  update_list(
+    "Updating host black list.",
+    config.black_list,
+    function(rx) { return RegExp(rx) },
+    function(list) { blacklist = list }
+  );
 }
 
 function update_iplist() {
-  fs.stat('./iplist', function(err, stats) {
-    if (!err) {
-      sys.log("Updating iplist.");
-      iplist = fs.readFileSync('./iplist').split('\n')
-               .filter(function(rx) { return rx.length });
-    }
-  });
+  update_list(
+    "Updating allowed ip list.",
+    config.allow_ip_list,
+    function(ip){return ip},
+    function(list) { iplist = list }
+  );
 }
 
 function ip_allowed(ip) {
-  for (i in iplist) {
-    if (iplist[i] == ip) {
-      return true;
-    }
-  }
-  return false;
+  return iplist.some(function(ip_) { return ip==ip_; });
 }
 
 function host_allowed(host) {
-  for (i in blacklist) {
-    if (blacklist[i].test(host)) {
-      return false;
-    }
-  }
-  return true;
+  return !blacklist.some(function(host_) { return host_.test(host); });
 }
 
 function deny(response, msg) {
@@ -61,7 +66,7 @@ function deny(response, msg) {
   response.end();
 }
 
-http.createServer(function(request, response) {
+function server_cb(request, response) {
   var ip = request.connection.remoteAddress;
   if (!ip_allowed(ip)) {
     msg = "IP " + ip + " is not allowed to use this proxy";
@@ -82,7 +87,7 @@ http.createServer(function(request, response) {
   var proxy_request = proxy.request(request.method, request.url, request.headers);
   proxy_request.addListener('response', function(proxy_response) {
     proxy_response.addListener('data', function(chunk) {
-      response.write(chunk);
+      response.write(chunk, 'binary');
     });
     proxy_response.addListener('end', function() {
       response.end();
@@ -90,13 +95,16 @@ http.createServer(function(request, response) {
     response.writeHead(proxy_response.statusCode, proxy_response.headers);
   });
   request.addListener('data', function(chunk) {
-    proxy_request.write(chunk);
+    proxy_request.write(chunk, 'binary');
   });
   request.addListener('end', function() {
     proxy_request.end();
   });
-}).listen(8080);
+}
 
 update_blacklist();
 update_iplist();
+
+sys.log("Starting the proxy server on port '" + config.proxy_port);
+http.createServer(server_cb).listen(config.proxy_port);
 
