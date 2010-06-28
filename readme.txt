@@ -19,18 +19,18 @@ Next, run proxy.js through node program:
 
 And that's it!
 
-Now I have also added ip-based access control and by default the proxy will
-deny all IPs. To add a new ip, just echo it to 'iplist' file:
+I have also added ip-based access control and by default the proxy will
+deny all IPs. To add a new ip, just echo it to 'allow_ip_list' file:
 
-    $ echo '1.2.3.4' >> iplist
+    $ echo '1.2.3.4' >> config/allow_ip_list
 
 And you don't need to restart the server, it will see the changes and update
 itself.
 
 You can also block hosts based on a regex pattern, to do that, echo the hosts
-you don't wish the proxy to serve to 'blacklist' file:
+you don't wish the proxy to serve to 'black_list' file:
 
-    $ echo 'facebook.com' >> blacklist
+    $ echo 'facebook.com' >> config/black_list
 
 
 More features coming later!
