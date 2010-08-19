@@ -83,7 +83,8 @@ function server_cb(request, response) {
   }
 
   sys.log(ip + ": " + request.method + " " + request.url);
-  var proxy = http.createClient(80, request.headers['host'])
+  var host = request.headers['host'].split(':');
+  var proxy = http.createClient(host[1] || 80, host[0])
   var proxy_request = proxy.request(request.method, request.url, request.headers);
   proxy_request.addListener('response', function(proxy_response) {
     proxy_response.addListener('data', function(chunk) {
