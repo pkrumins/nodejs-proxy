@@ -100,6 +100,7 @@ function server_cb(request, response) {
   });
   request.addListener('end', function() {
     proxy_request.end();
+    proxy_request.close();
   });
 }
 
