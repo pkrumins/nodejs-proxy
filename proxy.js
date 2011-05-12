@@ -22,10 +22,11 @@ function update_list(msg, file, mapf, collectorf) {
   fs.stat(file, function(err, stats) {
     if (!err) {
       sys.log(msg);
-      collectorf(fs.readFileSync(file)
-                   .split('\n')
+      fs.readFile(file, function(err, data) {
+        collectorf(data.toString().split("\n")
                    .filter(function(rx) { return rx.length })
                    .map(mapf));
+      });
     }
     else {
       sys.log("File '" + file + "' was not found.");
@@ -100,7 +101,6 @@ function server_cb(request, response) {
   });
   request.addListener('end', function() {
     proxy_request.end();
-    proxy_request.close();
   });
 }
 
