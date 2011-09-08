@@ -9,7 +9,9 @@
 var config = {
   allow_ip_list: './config/allow_ip_list',
   black_list:    './config/black_list',
-  proxy_port:    8080
+  host_filters:   './config/hostfilters.js',
+  proxy_port:    80,
+  proxy_ip:      '0.0.0.0'
 };
 
 exports.config = config;
