@@ -134,12 +134,17 @@ function server_cb(request, response) {
   if(!request){return;}
   
   sys.log(ip + ": " + request.method + " " + request.url);
-  //var host = request.headers['host'].split(':');
+  
+  //calc new host info
   var host = host_filter(request.headers.host);
   if(host.port!=80){request.headers.host = host.host+':'+host.port;}
   else{request.headers.host = host.host;}
+  
+  //launch new request
   var proxy = http.createClient(host.port || 80, host.host);
   var proxy_request = proxy.request(request.method, request.url, request.headers);
+  
+   //proxies to FORWARD answer to real client
   proxy_request.addListener('response', function(proxy_response) {
     proxy_response.addListener('data', function(chunk) {
       response.write(chunk, 'binary');
@@ -149,6 +154,8 @@ function server_cb(request, response) {
     });
     response.writeHead(proxy_response.statusCode, proxy_response.headers);
   });
+  
+  //proxies to SEND request to real server
   request.addListener('data', function(chunk) {
     proxy_request.write(chunk, 'binary');
   });
