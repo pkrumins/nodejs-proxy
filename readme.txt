@@ -1,5 +1,5 @@
-Nodejs-proxy is a simple HTTP proxy server written in node.js. It currently
-just proxies all the requests on port 8080.
+Nodejs-proxy is a simple HTTP reverse proxy server written in node.js. It currently
+allows some mid-complexity to handle the reverse proxy magic take place.
 
 Nodejs-proxy was written by Peteris Krumins (peter@catonmat.net).
 His blog is at http://www.catonmat.net  --  good coders code, great reuse.
@@ -19,8 +19,9 @@ Next, run proxy.js through node program:
 
 And that's it!
 
-I have also added ip-based access control and by default the proxy will
-deny all IPs. To add a new ip, just echo it to 'allow_ip_list' file:
+I have also added ip-based access control. As long as no ip is explicitly denied,
+all will be allowed. If you need a specic access list just echo it to
+'allow_ip_list' file:
 
     $ echo '1.2.3.4' >> config/allow_ip_list
 

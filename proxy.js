@@ -141,10 +141,11 @@ function server_cb(request, response) {
   else{request.headers.host = host.host;}
   
   //launch new request
-  var proxy = http.createClient(host.port || 80, host.host);
-  var proxy_request = proxy.request(request.method, request.url, request.headers);
+  try{
+    var proxy = http.createClient(host.port || 80, host.host);
+    var proxy_request = proxy.request(request.method, request.url, request.headers);
   
-   //proxies to FORWARD answer to real client
+  //proxies to FORWARD answer to real client
   proxy_request.addListener('response', function(proxy_response) {
     proxy_response.addListener('data', function(chunk) {
       response.write(chunk, 'binary');
@@ -155,6 +156,8 @@ function server_cb(request, response) {
     response.writeHead(proxy_response.statusCode, proxy_response.headers);
   });
   
+  
+  
   //proxies to SEND request to real server
   request.addListener('data', function(chunk) {
     proxy_request.write(chunk, 'binary');
@@ -162,12 +165,25 @@ function server_cb(request, response) {
   request.addListener('end', function() {
     proxy_request.end();
   });
+  
+  }catch(err){
+    console.log('ERROR: Caught exception: ' + err);
+    sys.log("Connection to "+host.host+":"+(host.port||80)+" failed");
+  }
 }
 
+//last chance error handler
+process.on('uncaughtException', function (err) {
+  console.log('LAST ERROR: Caught exception: ' + err);
+});
+
+//startup + log
 update_blacklist();
 update_iplist();
 update_hostfilters();
 
-sys.log("Starting the proxy server on port '" + config.proxy_ip+':'+config.proxy_port);
-http.createServer(server_cb).listen(config.proxy_port, config.proxy_ip);
+config.listen.forEach(function(listen){
+  sys.log("Starting reverse proxy server on port '" + listen.ip+':'+listen.port);
+  http.createServer(server_cb).listen(listen.port, listen.ip); 
+});
 
