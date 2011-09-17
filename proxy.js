@@ -16,10 +16,27 @@ var blacklist = [];
 var iplist    = [];
 var hostfilters = {};
 
+
+//support functions
+function hosthelper(host){
+    out={};
+    host = host.split(':');
+    out.host = host[0];
+    out.port = host[1] || 80;
+    return out;
+}
+
+function hostporthelper(host){
+    return host.host+((host.port==80)?"":":"+host.port);
+}
+
+//config files watchers
 fs.watchFile(config.black_list,    function(c,p) { update_blacklist(); });
 fs.watchFile(config.allow_ip_list, function(c,p) { update_iplist(); });
 fs.watchFile(config.host_filters,  function(c,p) { update_hostfilters(); });
 
+
+//config files loaders/updaters
 function update_list(msg, file, mapf, collectorf) {
   fs.stat(file, function(err, stats) {
     if (!err) {
@@ -43,6 +60,10 @@ function update_hostfilters(){
     if (!err) {
       sys.log("Updating host filter");
       fs.readFile(file, function(err, data) {
+        sys.log(file);
+        sys.log((err)?err:"");
+        sys.log(data.toString());
+        
         hostfilters = JSON.parse(data.toString());
       });
     }
@@ -71,6 +92,8 @@ function update_iplist() {
   );
 }
 
+
+//filtering rules
 function ip_allowed(ip) {
   return iplist.some(function(ip_) { return ip==ip_; }) || iplist.length <1;
 }
@@ -79,19 +102,41 @@ function host_allowed(host) {
   return !blacklist.some(function(host_) { return host_.test(host); });
 }
 
+//proxying
+//handle 2 rules:
+//  * redirect (301)
+//  * proxyto
+function handle_proxy_rule(rule, target){
+  if(rule['redirect']!==undefined){
+    target = hosthelper(rule['redirect']);
+    target.action = "redirect";
+  } else if(rule['proxyto']!==undefined){
+    target = hosthelper(rule['proxyto']);
+    target.action = "proxyto";
+  }
+  return target;
+}
+
 function host_filter(host) {
-    if(hostfilters[host] !== undefined){
-        target = hostfilters[host].redirect;
-        if(target !== undefined){
-            target = target.split(':');
-            var ret = {};
-            ret.host = target[0];
-            ret.port = target[1] || 80;
-            sys.log('redirecting to : '+ret.host+":"+ret.port);
-            return ret;
-        }
+    //extract target host and port
+    action = hosthelper(host);
+    action.action="proxyto";
+    
+    //try to find a matching rule
+    if(hostfilters[action.host+':'+action.port]!==undefined){
+      rule=hostfilters[action.host+':'+action.port];
+      action=handle_proxy_rule(rule, action);
+    }else if (hostfilters[action.host]!==undefined){
+      rule=hostfilters[action.host];
+      action=handle_proxy_rule(rule, action);
+    }else if (hostfilters['*:'+action.port]!==undefined){
+      rule=hostfilters['*:'+action.port];
+      action=handle_proxy_rule(rule, action);
+    }else if (hostfilters['*']!==undefined){
+      rule=hostfilters['*'];
+      action=handle_proxy_rule(rule, action);
     }
-    return {host:host, port:80};
+    return action;
 }
 
 function prevent_loop(request, response){
@@ -107,43 +152,28 @@ function prevent_loop(request, response){
   }
 }
 
-function deny(response, msg) {
-  response.writeHead(401);
+function action_deny(response, msg) {
+  response.writeHead(403);
   response.write(msg);
   response.end();
 }
 
-function server_cb(request, response) {
-  var ip = request.connection.remoteAddress;
-  if (!ip_allowed(ip)) {
-    msg = "IP " + ip + " is not allowed to use this proxy";
-    deny(response, msg);
-    sys.log(msg);
-    return;
-  }
+function action_redirect(response, host){
+  sys.log("Redirecting to " + host);
+  response.writeHead(301,{
+    'Location': "http://"+host
+  });
+  response.end();
+}
 
-  if (!host_allowed(request.url)) {
-    msg = "Host " + request.url + " has been denied by proxy configuration";
-    deny(response, msg);
-    sys.log(msg);
-    return;
-  }
-  
-  //loop filter
-  request = prevent_loop(request, response);
-  if(!request){return;}
-  
-  sys.log(ip + ": " + request.method + " " + request.url);
-  
-  //calc new host info
-  var host = host_filter(request.headers.host);
-  if(host.port!=80){request.headers.host = host.host+':'+host.port;}
-  else{request.headers.host = host.host;}
+function action_proxy(response, request, host){
+  sys.log("Proxying to " + host);
+    
+  request.headers.host = host;
   
   //launch new request
-  try{
-    var proxy = http.createClient(host.port || 80, host.host);
-    var proxy_request = proxy.request(request.method, request.url, request.headers);
+  var proxy = http.createClient(action.port, action.host);
+  var proxy_request = proxy.request(request.method, request.url, request.headers);
   
   //proxies to FORWARD answer to real client
   proxy_request.addListener('response', function(proxy_response) {
@@ -155,9 +185,7 @@ function server_cb(request, response) {
     });
     response.writeHead(proxy_response.statusCode, proxy_response.headers);
   });
-  
-  
-  
+
   //proxies to SEND request to real server
   request.addListener('data', function(chunk) {
     proxy_request.write(chunk, 'binary');
@@ -165,17 +193,46 @@ function server_cb(request, response) {
   request.addListener('end', function() {
     proxy_request.end();
   });
+}
+
+function server_cb(request, response) {
+  var ip = request.connection.remoteAddress;
+  if (!ip_allowed(ip)) {
+    msg = "IP " + ip + " is not allowed to use this proxy";
+    action_deny(response, msg);
+    sys.log(msg);
+    return;
+  }
+
+  if (!host_allowed(request.url)) {
+    msg = "Host " + request.url + " has been denied by proxy configuration";
+    action_deny(response, msg);
+    sys.log(msg);
+    return;
+  }
   
-  }catch(err){
-    console.log('ERROR: Caught exception: ' + err);
-    sys.log("Connection to "+host.host+":"+(host.port||80)+" failed");
+  //loop filter
+  request = prevent_loop(request, response);
+  if(!request){return;}
+  
+  sys.log(ip + ": " + request.method + " " + request.url);
+  
+  //calc new host info
+  var action = host_filter(request.headers.host);
+  host = hostporthelper(action);
+  
+  //handle action
+  if(action.action == "redirect"){
+    action_redirect(response, host);
+  }else if(action.action == "proxyto"){
+    action_proxy(response, request, host);
   }
 }
 
 //last chance error handler
-process.on('uncaughtException', function (err) {
+/*process.on('uncaughtException', function (err) {
   console.log('LAST ERROR: Caught exception: ' + err);
-});
+});*/
 
 //startup + log
 update_blacklist();
