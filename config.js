@@ -10,8 +10,8 @@ var config = {
   allow_ip_list: './config/allow_ip_list',
   black_list:    './config/black_list',
   host_filters:   './config/hostfilters.js',
-  listen:[{ip:'91.121.154.113', port:80},
-          {ip:'2001:41d0:1:db71::1', port:80}]    
+  listen:[{ip:'0.0.0.0', port:80},//all ipv4 interfaces
+          {ip:'::', port:80}]//all ipv6 interfaces
 };
 
 exports.config = config;
