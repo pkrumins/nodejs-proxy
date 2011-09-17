@@ -23,6 +23,17 @@ priority :
 1) redirect => will issue a 301 to the browser
 2) proxyto  => will lead to a "regular" reverse proxying
 3) default is to proxy
+Note that user authentication is *always* performed **before**. See bellow for 
+more informations on athentication
+
+It is also possible to specify authorization criterion. This is done using the
+"Basic" http authentication scheme as defined in RFC 2617. "Digest" is not (yet ?)
+supported. Since this reverse proxy is not seen by the useragent as a real proxy,
+we can not use proxy-authenticate. This is sad because it prevents you from dong
+http authentication on the other side as soon as you do not use the same credentials.
+Passwords SHALL be written un-encrypted at the moment.
+If you are planing on doing authentication on the application side, please do not
+use this feature as it will break it !
 
 NOTA: only http is supported, no HTTPS yet
 
@@ -32,7 +43,12 @@ example:
             "redirect": "www.google.com"
         },
         "*:80":{
-            "proxyto": "localhost:80"
+            "proxyto": "localhost:80",
+            "validuser":{
+                "admin":"pasword",
+                "user":"secret"
+            },
+            "description":"Very secret project here ;-)"
         }
     }
 

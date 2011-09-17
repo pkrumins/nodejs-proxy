@@ -43,7 +43,7 @@ function update_list(msg, file, mapf, collectorf) {
       sys.log(msg);
       fs.readFile(file, function(err, data) {
         collectorf(data.toString().split("\n")
-                   .filter(function(rx) { return rx.length })
+                   .filter(function(rx){return rx.length;})
                    .map(mapf));
       });
     }
@@ -74,8 +74,8 @@ function update_blacklist() {
   update_list(
     "Updating host black list.",
     config.black_list,
-    function(rx) { return RegExp(rx) },
-    function(list) { blacklist = list }
+    function(rx){return RegExp(rx);},
+    function(list){blacklist = list;}
   );
 }
 
@@ -83,8 +83,8 @@ function update_iplist() {
   update_list(
     "Updating allowed ip list.",
     config.allow_ip_list,
-    function(ip){return ip},
-    function(list) { iplist = list }
+    function(ip){return ip;},
+    function(list){iplist = list;}
   );
 }
 
@@ -98,11 +98,38 @@ function host_allowed(host) {
   return !blacklist.some(function(host_) { return host_.test(host); });
 }
 
+//header decoding
+function authenticate(request){
+  token={
+        "login":"anonymous",
+        "pass":""
+      };
+  if (request.headers.authorization && request.headers.authorization.search('Basic ') === 0) {
+    // fetch login and password
+    basic = (new Buffer(request.headers.authorization.split(' ')[1], 'base64').toString());
+    sys.log("Authentication token received: "+basic);
+    basic = basic.split(':');
+    token.login = basic[0];
+    token.pass  = basic[1];//fixme: potential trouble if there is a ":" in the pass
+  }
+  return token;
+}
+
 //proxying
 //handle 2 rules:
 //  * redirect (301)
 //  * proxyto
-function handle_proxy_rule(rule, target){
+function handle_proxy_rule(rule, target, token){
+  //handle authorization
+  if("validuser" in rule){
+      if(!(token.login in rule.validuser) || (rule.validuser[token.login] != token.pass)){
+         target.action = "authenticate";
+         target.msg = rule.description || "";
+         return target;
+      }
+  }
+  
+  //handle real acions
   if("redirect" in rule){
     target = hosthelper(rule.redirect);
     target.action = "redirect";
@@ -113,7 +140,7 @@ function handle_proxy_rule(rule, target){
   return target;
 }
 
-function host_filter(host) {
+function host_filter(host, token) {
     //extract target host and port
     action = hosthelper(host);
     action.action="proxyto";
@@ -121,16 +148,16 @@ function host_filter(host) {
     //try to find a matching rule
     if(action.host+':'+action.port in hostfilters){
       rule=hostfilters[action.host+':'+action.port];
-      action=handle_proxy_rule(rule, action);
+      action=handle_proxy_rule(rule, action, token);
     }else if (action.host in hostfilters){
       rule=hostfilters[action.host];
-      action=handle_proxy_rule(rule, action);
+      action=handle_proxy_rule(rule, action, token);
     }else if ("*:"+action.port in hostfilters){
       rule=hostfilters['*:'+action.port];
-      action=handle_proxy_rule(rule, action);
+      action=handle_proxy_rule(rule, action, token);
     }else if ("*" in hostfilters){
       rule=hostfilters['*'];
-      action=handle_proxy_rule(rule, action);
+      action=handle_proxy_rule(rule, action, token);
     }
     return action;
 }
@@ -146,6 +173,13 @@ function prevent_loop(request, response){
     request.headers.proxy="node.jtlebi";
     return request;
   }
+}
+
+function action_authenticate(response, msg){
+  response.writeHead(401,{
+    'WWW-Authenticate': "Basic realm=\""+msg+"\""
+  });
+  response.end();
 }
 
 function action_deny(response, msg) {
@@ -225,8 +259,11 @@ function server_cb(request, response) {
   
   sys.log(ip + ": " + request.method + " " + request.url);
   
+  //get authorization token
+  authorization = authenticate(request);
+  
   //calc new host info
-  var action = host_filter(request.headers.host);
+  var action = host_filter(request.headers.host, authorization);
   host = hostporthelper(action);
   
   //handle action
@@ -234,10 +271,13 @@ function server_cb(request, response) {
     action_redirect(response, host);
   }else if(action.action == "proxyto"){
     action_proxy(response, request, host);
+  } else if(action.action == "authenticate"){
+    action_authenticate(response, action.msg);
   }
 }
 
 //last chance error handler
+//de-comment it in a production env for more stability :)
 /*process.on('uncaughtException', function (err) {
   console.log('LAST ERROR: Caught exception: ' + err);
 });*/
