@@ -103,11 +103,11 @@ function host_allowed(host) {
 //  * redirect (301)
 //  * proxyto
 function handle_proxy_rule(rule, target){
-  if(rule['redirect']!==undefined){
-    target = hosthelper(rule['redirect']);
+  if("redirect" in rule){
+    target = hosthelper(rule.redirect);
     target.action = "redirect";
-  } else if(rule['proxyto']!==undefined){
-    target = hosthelper(rule['proxyto']);
+  } else if("proxyto" in rule){
+    target = hosthelper(rule.proxyto);
     target.action = "proxyto";
   }
   return target;
@@ -119,16 +119,16 @@ function host_filter(host) {
     action.action="proxyto";
     
     //try to find a matching rule
-    if(hostfilters[action.host+':'+action.port]!==undefined){
+    if(action.host+':'+action.port in hostfilters){
       rule=hostfilters[action.host+':'+action.port];
       action=handle_proxy_rule(rule, action);
-    }else if (hostfilters[action.host]!==undefined){
+    }else if (action.host in hostfilters){
       rule=hostfilters[action.host];
       action=handle_proxy_rule(rule, action);
-    }else if (hostfilters['*:'+action.port]!==undefined){
+    }else if ("*:"+action.port in hostfilters){
       rule=hostfilters['*:'+action.port];
       action=handle_proxy_rule(rule, action);
-    }else if (hostfilters['*']!==undefined){
+    }else if ("*" in hostfilters){
       rule=hostfilters['*'];
       action=handle_proxy_rule(rule, action);
     }
@@ -154,6 +154,12 @@ function action_deny(response, msg) {
   response.end();
 }
 
+function action_notfound(response, msg){
+  response.writeHead(404);
+  response.write(msg);
+  response.end();
+}
+
 function action_redirect(response, host){
   sys.log("Redirecting to " + host);
   response.writeHead(301,{
@@ -170,6 +176,12 @@ function action_proxy(response, request, host){
   //launch new request
   var proxy = http.createClient(action.port, action.host);
   var proxy_request = proxy.request(request.method, request.url, request.headers);
+  
+  //deal with errors, timeout, con refused, ...
+  proxy.on('error', function(err) {
+    sys.log(err.toString() + " on request to " + host);
+    return action_notfound(response, "Requested resource ("+request.url+") is not accessible on host \""+host+"\"");
+  });
   
   //proxies to FORWARD answer to real client
   proxy_request.addListener('response', function(proxy_response) {
