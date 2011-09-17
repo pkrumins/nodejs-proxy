@@ -59,11 +59,7 @@ function update_hostfilters(){
     fs.stat(file, function(err, stats) {
     if (!err) {
       sys.log("Updating host filter");
-      fs.readFile(file, function(err, data) {
-        sys.log(file);
-        sys.log((err)?err:"");
-        sys.log(data.toString());
-        
+      fs.readFile(file, function(err, data) {        
         hostfilters = JSON.parse(data.toString());
       });
     }
