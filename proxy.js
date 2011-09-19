@@ -251,7 +251,7 @@ function security_filter(request, response){
   if(request.headers.host === undefined ||
      request.method === undefined ||
      request.url === undefined){
-    security_log(request, response, msg);
+    security_log(request, response, "Either host, method or url is poorly defined");
     return false;
   }
   return true;
