@@ -205,8 +205,6 @@ function action_redirect(response, host){
 function action_proxy(response, request, host){
   sys.log("Proxying to " + host);
     
-  request.headers.host = host;
-  
   //launch new request
   var proxy = http.createClient(action.port, action.host);
   var proxy_request = proxy.request(request.method, request.url, request.headers);
