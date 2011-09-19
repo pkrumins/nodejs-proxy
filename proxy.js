@@ -18,7 +18,9 @@ var hostfilters = {};
 
 
 //support functions
-function hosthelper(host){
+
+//decode host and port info from header
+function decode_host(host){
     out={};
     host = host.split(':');
     out.host = host[0];
@@ -26,14 +28,15 @@ function hosthelper(host){
     return out;
 }
 
-function hostporthelper(host){
+//encode host field
+function encode_host(host){
     return host.host+((host.port==80)?"":":"+host.port);
 }
 
 //config files watchers
 fs.watchFile(config.black_list,    function(c,p) { update_blacklist(); });
 fs.watchFile(config.allow_ip_list, function(c,p) { update_iplist(); });
-fs.watchFile(config.host_filters,  function(c,p) { update_hostfilters(); });
+fs.watchFile(config.handle_proxy_routes,  function(c,p) { update_hostfilters(); });
 
 
 //config files loaders/updaters
@@ -55,7 +58,7 @@ function update_list(msg, file, mapf, collectorf) {
 }
 
 function update_hostfilters(){
-    file = config.host_filters;
+    file = config.handle_proxy_routes;
     fs.stat(file, function(err, stats) {
     if (!err) {
       sys.log("Updating host filter");
@@ -129,33 +132,33 @@ function handle_proxy_rule(rule, target, token){
       }
   }
   
-  //handle real acions
+  //handle real actions
   if("redirect" in rule){
-    target = hosthelper(rule.redirect);
+    target = decode_host(rule.redirect);
     target.action = "redirect";
   } else if("proxyto" in rule){
-    target = hosthelper(rule.proxyto);
+    target = decode_host(rule.proxyto);
     target.action = "proxyto";
   }
   return target;
 }
 
-function host_filter(host, token) {
+function handle_proxy_route(host, token) {
     //extract target host and port
-    action = hosthelper(host);
-    action.action="proxyto";
+    action = decode_host(host);
+    action.action="proxyto";//default action
     
     //try to find a matching rule
-    if(action.host+':'+action.port in hostfilters){
+    if(action.host+':'+action.port in hostfilters){//rule of the form "foo.domain.tld:port"
       rule=hostfilters[action.host+':'+action.port];
       action=handle_proxy_rule(rule, action, token);
-    }else if (action.host in hostfilters){
+    }else if (action.host in hostfilters){//rule of the form "foo.domain.tld"
       rule=hostfilters[action.host];
       action=handle_proxy_rule(rule, action, token);
-    }else if ("*:"+action.port in hostfilters){
+    }else if ("*:"+action.port in hostfilters){//rule of the form "*:port"
       rule=hostfilters['*:'+action.port];
       action=handle_proxy_rule(rule, action, token);
-    }else if ("*" in hostfilters){
+    }else if ("*" in hostfilters){//default rule "*"
       rule=hostfilters['*'];
       action=handle_proxy_rule(rule, action, token);
     }
@@ -163,13 +166,13 @@ function host_filter(host, token) {
 }
 
 function prevent_loop(request, response){
-  if(request.headers.proxy=="node.jtlebi"){
+  if(request.headers.proxy=="node.jtlebi"){//if request is already tooted => loop
     sys.log("Loop detected");
     response.writeHead(500);
     response.write("Proxy loop !");
     response.end();
     return false;
-  } else {
+  } else {//append a tattoo to it
     request.headers.proxy="node.jtlebi";
     return request;
   }
@@ -290,8 +293,8 @@ function server_cb(request, response) {
   authorization = authenticate(request);
   
   //calc new host info
-  var action = host_filter(request.headers.host, authorization);
-  host = hostporthelper(action);
+  var action = handle_proxy_route(request.headers.host, authorization);
+  host = encode_host(action);
   
   //handle action
   if(action.action == "redirect"){
@@ -304,7 +307,9 @@ function server_cb(request, response) {
 }
 
 //last chance error handler
-//de-comment it in a production env for more stability :)
+//it catch the exception preventing the application from crashing.
+//I recommend to comment it in a development environment as it
+//"Hides" very interesting bits of debugging informations.
 /*process.on('uncaughtException', function (err) {
   console.log('LAST ERROR: Caught exception: ' + err);
 });*/
