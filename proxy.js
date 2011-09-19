@@ -237,7 +237,36 @@ function action_proxy(response, request, host){
   });
 }
 
+//special security logging function
+function security_log(request, response, msg){
+  var ip = request.connection.remoteAddress;
+  msg = "**SECURITY VIOLATION**, "+ip+","+request.method||""+" "+request.url||""+","+msg;
+  
+  sys.log(msg);
+}
+
+//security filter
+// true if OK
+// false to return immediatlely
+function security_filter(request, response){
+  //HTTP 1.1 protocol violation: no host, no method, no url
+  if(request.headers.host === undefined ||
+     request.method === undefined ||
+     request.url === undefined){
+    security_log(request, response, msg);
+    return false;
+  }
+  return true;
+}
+
+//actual server loop
 function server_cb(request, response) {
+  //the *very* first action here is to handle security conditions
+  //all related actions including logging are done by specialized functions
+  //to ensure compartimentation
+  if(!security_filter(request, response)) return;
+  
+  
   var ip = request.connection.remoteAddress;
   if (!ip_allowed(ip)) {
     msg = "IP " + ip + " is not allowed to use this proxy";
