@@ -36,7 +36,7 @@ function encode_host(host){
 //config files watchers
 fs.watchFile(config.black_list,    function(c,p) { update_blacklist(); });
 fs.watchFile(config.allow_ip_list, function(c,p) { update_iplist(); });
-fs.watchFile(config.handle_proxy_routes,  function(c,p) { update_hostfilters(); });
+fs.watchFile(config.host_filters,  function(c,p) { update_hostfilters(); });
 
 
 //config files loaders/updaters
@@ -58,7 +58,7 @@ function update_list(msg, file, mapf, collectorf) {
 }
 
 function update_hostfilters(){
-    file = config.handle_proxy_routes;
+    file = config.host_filters;
     fs.stat(file, function(err, stats) {
     if (!err) {
       sys.log("Updating host filter");
