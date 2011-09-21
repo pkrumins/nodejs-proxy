@@ -224,7 +224,7 @@ function action_proxy(response, request, host){
       response.write(chunk, 'binary');
     });
     proxy_response.addListener('end', function() {
-      response.destroy();
+      response.end();
     });
     response.writeHead(proxy_response.statusCode, proxy_response.headers);
   });
