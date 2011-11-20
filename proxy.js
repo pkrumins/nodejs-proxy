@@ -207,6 +207,9 @@ function action_redirect(response, host){
 
 function action_proxy(response, request, host){
   sys.log("Proxying to " + host);
+  
+  //detect HTTP version
+  var legacy_http = request.httpVersionMajor == 1 && request.httpVersionMinor < 1 || request.httpVersionMajor < 1;
     
   //launch new request
   var proxy = http.createClient(action.port, action.host);
@@ -220,13 +223,37 @@ function action_proxy(response, request, host){
   
   //proxies to FORWARD answer to real client
   proxy_request.addListener('response', function(proxy_response) {
-    proxy_response.addListener('data', function(chunk) {
-      response.write(chunk, 'binary');
-    });
-    proxy_response.addListener('end', function() {
-      response.end();
-    });
-    response.writeHead(proxy_response.statusCode, proxy_response.headers);
+      
+    if(legacy_http && proxy_response.headers['Transfer-Encoding'] != undefined){
+        console.log("legacy HTTP: "+proxy_response.httpVersion);
+        
+        //filter headers
+        var headers = proxy_response.headers;
+        delete proxy_response.headers['Transfer-Encoding'];
+        response.writeHead(proxy_response.statusCode, headers);
+        
+        var buffer = "";
+        
+        //buffer answer
+        proxy_response.addListener('data', function(chunk) {
+          buffer += chunk;
+        });
+        proxy_response.addListener('end', function() {
+          response.write(buffer, 'binary');
+          response.end();
+        });
+    } else {
+        //send headers as received
+        response.writeHead(proxy_response.statusCode, proxy_response.headers);
+        
+        //easy data forward
+        proxy_response.addListener('data', function(chunk) {
+          response.write(chunk, 'binary');
+        });
+        proxy_response.addListener('end', function() {
+          response.end();
+        });
+    }
   });
 
   //proxies to SEND request to real server
