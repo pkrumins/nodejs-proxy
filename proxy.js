@@ -223,15 +223,12 @@ function action_proxy(response, request, host){
   
   //proxies to FORWARD answer to real client
   proxy_request.addListener('response', function(proxy_response) {
-      
-    if(legacy_http && proxy_response.headers['Transfer-Encoding'] != undefined){
-        console.log("legacy HTTP: "+proxy_response.httpVersion);
+    if(legacy_http && proxy_response.headers['transfer-encoding'] != undefined){
+        console.log("legacy HTTP: "+request.httpVersion);
         
         //filter headers
         var headers = proxy_response.headers;
-        delete proxy_response.headers['Transfer-Encoding'];
-        response.writeHead(proxy_response.statusCode, headers);
-        
+        delete proxy_response.headers['transfer-encoding'];        
         var buffer = "";
         
         //buffer answer
@@ -239,6 +236,8 @@ function action_proxy(response, request, host){
           buffer += chunk;
         });
         proxy_response.addListener('end', function() {
+          headers['Content-length'] = buffer.length;//cancel transfer encoding "chunked"
+          response.writeHead(proxy_response.statusCode, headers);
           response.write(buffer, 'binary');
           response.end();
         });
