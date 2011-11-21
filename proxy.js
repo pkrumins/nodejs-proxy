@@ -18,7 +18,9 @@ var hostfilters = {};
 
 
 //support functions
-function hosthelper(host){
+
+//decode host and port info from header
+function decode_host(host){
     out={};
     host = host.split(':');
     out.host = host[0];
@@ -26,7 +28,8 @@ function hosthelper(host){
     return out;
 }
 
-function hostporthelper(host){
+//encode host field
+function encode_host(host){
     return host.host+((host.port==80)?"":":"+host.port);
 }
 
@@ -129,33 +132,33 @@ function handle_proxy_rule(rule, target, token){
       }
   }
   
-  //handle real acions
+  //handle real actions
   if("redirect" in rule){
-    target = hosthelper(rule.redirect);
+    target = decode_host(rule.redirect);
     target.action = "redirect";
   } else if("proxyto" in rule){
-    target = hosthelper(rule.proxyto);
+    target = decode_host(rule.proxyto);
     target.action = "proxyto";
   }
   return target;
 }
 
-function host_filter(host, token) {
+function handle_proxy_route(host, token) {
     //extract target host and port
-    action = hosthelper(host);
-    action.action="proxyto";
+    action = decode_host(host);
+    action.action="proxyto";//default action
     
     //try to find a matching rule
-    if(action.host+':'+action.port in hostfilters){
+    if(action.host+':'+action.port in hostfilters){//rule of the form "foo.domain.tld:port"
       rule=hostfilters[action.host+':'+action.port];
       action=handle_proxy_rule(rule, action, token);
-    }else if (action.host in hostfilters){
+    }else if (action.host in hostfilters){//rule of the form "foo.domain.tld"
       rule=hostfilters[action.host];
       action=handle_proxy_rule(rule, action, token);
-    }else if ("*:"+action.port in hostfilters){
+    }else if ("*:"+action.port in hostfilters){//rule of the form "*:port"
       rule=hostfilters['*:'+action.port];
       action=handle_proxy_rule(rule, action, token);
-    }else if ("*" in hostfilters){
+    }else if ("*" in hostfilters){//default rule "*"
       rule=hostfilters['*'];
       action=handle_proxy_rule(rule, action, token);
     }
@@ -163,13 +166,13 @@ function host_filter(host, token) {
 }
 
 function prevent_loop(request, response){
-  if(request.headers.proxy=="node.jtlebi"){
+  if(request.headers.proxy=="node.jtlebi"){//if request is already tooted => loop
     sys.log("Loop detected");
     response.writeHead(500);
     response.write("Proxy loop !");
     response.end();
     return false;
-  } else {
+  } else {//append a tattoo to it
     request.headers.proxy="node.jtlebi";
     return request;
   }
@@ -204,6 +207,9 @@ function action_redirect(response, host){
 
 function action_proxy(response, request, host){
   sys.log("Proxying to " + host);
+  
+  //detect HTTP version
+  var legacy_http = request.httpVersionMajor == 1 && request.httpVersionMinor < 1 || request.httpVersionMajor < 1;
     
   //launch new request
   var proxy = http.createClient(action.port, action.host);
@@ -217,13 +223,36 @@ function action_proxy(response, request, host){
   
   //proxies to FORWARD answer to real client
   proxy_request.addListener('response', function(proxy_response) {
-    proxy_response.addListener('data', function(chunk) {
-      response.write(chunk, 'binary');
-    });
-    proxy_response.addListener('end', function() {
-      response.end();
-    });
-    response.writeHead(proxy_response.statusCode, proxy_response.headers);
+    if(legacy_http && proxy_response.headers['transfer-encoding'] != undefined){
+        console.log("legacy HTTP: "+request.httpVersion);
+        
+        //filter headers
+        var headers = proxy_response.headers;
+        delete proxy_response.headers['transfer-encoding'];        
+        var buffer = "";
+        
+        //buffer answer
+        proxy_response.addListener('data', function(chunk) {
+          buffer += chunk;
+        });
+        proxy_response.addListener('end', function() {
+          headers['Content-length'] = buffer.length;//cancel transfer encoding "chunked"
+          response.writeHead(proxy_response.statusCode, headers);
+          response.write(buffer, 'binary');
+          response.end();
+        });
+    } else {
+        //send headers as received
+        response.writeHead(proxy_response.statusCode, proxy_response.headers);
+        
+        //easy data forward
+        proxy_response.addListener('data', function(chunk) {
+          response.write(chunk, 'binary');
+        });
+        proxy_response.addListener('end', function() {
+          response.end();
+        });
+    }
   });
 
   //proxies to SEND request to real server
@@ -290,8 +319,8 @@ function server_cb(request, response) {
   authorization = authenticate(request);
   
   //calc new host info
-  var action = host_filter(request.headers.host, authorization);
-  host = hostporthelper(action);
+  var action = handle_proxy_route(request.headers.host, authorization);
+  host = encode_host(action);
   
   //handle action
   if(action.action == "redirect"){
@@ -304,7 +333,9 @@ function server_cb(request, response) {
 }
 
 //last chance error handler
-//de-comment it in a production env for more stability :)
+//it catch the exception preventing the application from crashing.
+//I recommend to comment it in a development environment as it
+//"Hides" very interesting bits of debugging informations.
 /*process.on('uncaughtException', function (err) {
   console.log('LAST ERROR: Caught exception: ' + err);
 });*/
