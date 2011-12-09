@@ -6,16 +6,13 @@
 **
 */
 
-var http = require('http');
-var util = require('util');
-var fs   = require('fs');
-
-var config = require('./config').config;
-
-var blacklist = [];
-var iplist    = [];
-var hostfilters = {};
-
+var http = require('http'),
+    util = require('util');
+    fs   = require('fs'),
+    config = require('./config').config,
+    blacklist = [],
+    iplist    = [],
+    hostfilters = {};
 
 //support functions
 
@@ -90,7 +87,6 @@ function update_iplist() {
     function(list){iplist = list;}
   );
 }
-
 
 //filtering rules
 function ip_allowed(ip) {
