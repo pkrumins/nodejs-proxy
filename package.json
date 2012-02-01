@@ -1,5 +1,5 @@
 {
-    "name": "proxy",
+    "name": "nodejs-proxy",
     "version": "1.0.0",
     "description": "Simple HTTP proxy for node.js",
     "main": "proxy.js",
