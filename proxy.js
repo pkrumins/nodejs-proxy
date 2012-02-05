@@ -306,7 +306,6 @@ function server_cb(request, response) {
     msg = "IP " + ip + " is not allowed to use this proxy";
     action_deny(response, msg);
     security_log(request, response, msg);    
-    util.log(msg);
     return;
   }
 
@@ -314,7 +313,6 @@ function server_cb(request, response) {
     msg = "Host " + request.url + " has been denied by proxy configuration";
     action_deny(response, msg);
     security_log(request, response, msg);    
-    util.log(msg);
     return;
   }
   
