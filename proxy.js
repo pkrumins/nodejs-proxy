@@ -7,7 +7,7 @@
 */
 
 var http = require('http');
-var sys  = require('sys');
+var sys  = require('util');
 var fs   = require('fs');
 
 var config = require('./config').config;
@@ -38,6 +38,8 @@ fs.watchFile(config.black_list,    function(c,p) { update_blacklist(); });
 fs.watchFile(config.allow_ip_list, function(c,p) { update_iplist(); });
 fs.watchFile(config.host_filters,  function(c,p) { update_hostfilters(); });
 
+//add a X-Forwarded-For header ?
+config.add_proxy_header = (config.add_proxy_header !== undefined && config.add_proxy_header == true);
 
 //config files loaders/updaters
 function update_list(msg, file, mapf, collectorf) {
@@ -211,7 +213,16 @@ function action_proxy(response, request, host){
   //detect HTTP version
   var legacy_http = request.httpVersionMajor == 1 && request.httpVersionMinor < 1 || request.httpVersionMajor < 1;
     
-  //launch new request
+  //launch new request + insert proxy specific header
+  var headers = request.headers;
+  if(config.add_proxy_header){
+    if(headers['X-Forwarded-For'] !== undefined){
+      headers['X-Forwarded-For'] = request.connection.remoteAddress + ", " + headers['X-Forwarded-For'];
+    }
+    else{ 
+      headers['X-Forwarded-For'] = request.connection.remoteAddress;
+    }
+  }
   var proxy = http.createClient(action.port, action.host);
   var proxy_request = proxy.request(request.method, request.url, request.headers);
   
@@ -267,7 +278,7 @@ function action_proxy(response, request, host){
 //special security logging function
 function security_log(request, response, msg){
   var ip = request.connection.remoteAddress;
-  msg = "**SECURITY VIOLATION**, "+ip+","+request.method||""+" "+request.url||""+","+msg;
+  msg = "**SECURITY VIOLATION**, "+ip+","+(request.method||"!NO METHOD!")+" "+(request.headers.host||"!NO HOST!")+"=>"+(request.url||"!NO URL!")+","+msg;
   
   sys.log(msg);
 }
@@ -298,14 +309,14 @@ function server_cb(request, response) {
   if (!ip_allowed(ip)) {
     msg = "IP " + ip + " is not allowed to use this proxy";
     action_deny(response, msg);
-    sys.log(msg);
+    security_log(request, response, msg);    
     return;
   }
 
   if (!host_allowed(request.url)) {
     msg = "Host " + request.url + " has been denied by proxy configuration";
     action_deny(response, msg);
-    sys.log(msg);
+    security_log(request, response, msg);    
     return;
   }
   
@@ -313,7 +324,7 @@ function server_cb(request, response) {
   request = prevent_loop(request, response);
   if(!request){return;}
   
-  sys.log(ip + ": " + request.method + " " + request.url);
+  sys.log(ip + ": " + request.method + " " + request.headers.host + "=>" + request.url);
   
   //get authorization token
   authorization = authenticate(request);
