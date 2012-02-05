@@ -6,16 +6,13 @@
 **
 */
 
-var http = require('http');
-var sys  = require('util');
-var fs   = require('fs');
-
-var config = require('./config').config;
-
-var blacklist = [];
-var iplist    = [];
-var hostfilters = {};
-
+var http = require('http'),
+    util = require('util');
+    fs   = require('fs'),
+    config = require('./config').config,
+    blacklist = [],
+    iplist    = [],
+    hostfilters = {};
 
 //support functions
 
@@ -45,7 +42,7 @@ config.add_proxy_header = (config.add_proxy_header !== undefined && config.add_p
 function update_list(msg, file, mapf, collectorf) {
   fs.stat(file, function(err, stats) {
     if (!err) {
-      sys.log(msg);
+      util.log(msg);
       fs.readFile(file, function(err, data) {
         collectorf(data.toString().split("\n")
                    .filter(function(rx){return rx.length;})
@@ -53,7 +50,7 @@ function update_list(msg, file, mapf, collectorf) {
       });
     }
     else {
-      sys.log("File '" + file + "' was not found.");
+      util.log("File '" + file + "' was not found.");
       collectorf([]);
     }
   });
@@ -63,13 +60,13 @@ function update_hostfilters(){
     file = config.host_filters;
     fs.stat(file, function(err, stats) {
     if (!err) {
-      sys.log("Updating host filter");
+      util.log("Updating host filter");
       fs.readFile(file, function(err, data) {        
         hostfilters = JSON.parse(data.toString());
       });
     }
     else {
-      sys.log("File '" + file + "' was not found.");
+      util.log("File '" + file + "' was not found.");
       hostfilters = {};
     }
   });
@@ -93,7 +90,6 @@ function update_iplist() {
   );
 }
 
-
 //filtering rules
 function ip_allowed(ip) {
   return iplist.some(function(ip_) { return ip==ip_; }) || iplist.length <1;
@@ -112,7 +108,7 @@ function authenticate(request){
   if (request.headers.authorization && request.headers.authorization.search('Basic ') === 0) {
     // fetch login and password
     basic = (new Buffer(request.headers.authorization.split(' ')[1], 'base64').toString());
-    sys.log("Authentication token received: "+basic);
+    util.log("Authentication token received: "+basic);
     basic = basic.split(':');
     token.login = basic[0];
     token.pass  = basic[1];//fixme: potential trouble if there is a ":" in the pass
@@ -169,7 +165,7 @@ function handle_proxy_route(host, token) {
 
 function prevent_loop(request, response){
   if(request.headers.proxy=="node.jtlebi"){//if request is already tooted => loop
-    sys.log("Loop detected");
+    util.log("Loop detected");
     response.writeHead(500);
     response.write("Proxy loop !");
     response.end();
@@ -200,7 +196,7 @@ function action_notfound(response, msg){
 }
 
 function action_redirect(response, host){
-  sys.log("Redirecting to " + host);
+  util.log("Redirecting to " + host);
   response.writeHead(301,{
     'Location': "http://"+host
   });
@@ -208,7 +204,7 @@ function action_redirect(response, host){
 }
 
 function action_proxy(response, request, host){
-  sys.log("Proxying to " + host);
+  util.log("Proxying to " + host);
   
   //detect HTTP version
   var legacy_http = request.httpVersionMajor == 1 && request.httpVersionMinor < 1 || request.httpVersionMajor < 1;
@@ -228,7 +224,7 @@ function action_proxy(response, request, host){
   
   //deal with errors, timeout, con refused, ...
   proxy.on('error', function(err) {
-    sys.log(err.toString() + " on request to " + host);
+    util.log(err.toString() + " on request to " + host);
     return action_notfound(response, "Requested resource ("+request.url+") is not accessible on host \""+host+"\"");
   });
   
@@ -280,7 +276,7 @@ function security_log(request, response, msg){
   var ip = request.connection.remoteAddress;
   msg = "**SECURITY VIOLATION**, "+ip+","+(request.method||"!NO METHOD!")+" "+(request.headers.host||"!NO HOST!")+"=>"+(request.url||"!NO URL!")+","+msg;
   
-  sys.log(msg);
+  util.log(msg);
 }
 
 //security filter
@@ -310,6 +306,7 @@ function server_cb(request, response) {
     msg = "IP " + ip + " is not allowed to use this proxy";
     action_deny(response, msg);
     security_log(request, response, msg);    
+    util.log(msg);
     return;
   }
 
@@ -317,6 +314,7 @@ function server_cb(request, response) {
     msg = "Host " + request.url + " has been denied by proxy configuration";
     action_deny(response, msg);
     security_log(request, response, msg);    
+    util.log(msg);
     return;
   }
   
@@ -324,7 +322,7 @@ function server_cb(request, response) {
   request = prevent_loop(request, response);
   if(!request){return;}
   
-  sys.log(ip + ": " + request.method + " " + request.headers.host + "=>" + request.url);
+  util.log(ip + ": " + request.method + " " + request.headers.host + "=>" + request.url);
   
   //get authorization token
   authorization = authenticate(request);
@@ -357,7 +355,7 @@ update_iplist();
 update_hostfilters();
 
 config.listen.forEach(function(listen){
-  sys.log("Starting reverse proxy server on port '" + listen.ip+':'+listen.port);
+  util.log("Starting reverse proxy server on port '" + listen.ip+':'+listen.port);
   http.createServer(server_cb).listen(listen.port, listen.ip); 
 });
 
