@@ -343,9 +343,10 @@ function server_cb(request, response) {
 //it catch the exception preventing the application from crashing.
 //I recommend to comment it in a development environment as it
 //"Hides" very interesting bits of debugging informations.
-/*process.on('uncaughtException', function (err) {
+process.on('uncaughtException', function (err) {
   console.log('LAST ERROR: Caught exception: ' + err);
-});*/
+  util.log(err.stack);
+});
 
 //startup + log
 update_blacklist();
