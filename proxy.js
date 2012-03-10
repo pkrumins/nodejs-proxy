@@ -109,7 +109,7 @@ function authenticate(request){
     // fetch login and password
     basic = (new Buffer(request.headers.authorization.split(' ')[1], 'base64').toString());
     util.log("Authentication token received: "+basic);
-    basic = basic.split(':');
+    basic = basic.split(':',1);
     token.login = basic[0];
     token.pass  = basic[1];//fixme: potential trouble if there is a ":" in the pass
   }
