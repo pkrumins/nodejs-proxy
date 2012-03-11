@@ -7,6 +7,7 @@
 */
 
 var http = require('http'),
+    https = require('https');
     util = require('util');
     fs   = require('fs'),
     config = require('./config').config,
@@ -356,8 +357,20 @@ update_blacklist();
 update_iplist();
 update_hostfilters();
 
+//http
 config.listen.forEach(function(listen){
   util.log("Starting reverse proxy server on port '" + listen.ip+':'+listen.port);
   http.createServer(server_cb).listen(listen.port, listen.ip); 
+});
+
+//httpS
+config.listen_ssl.forEach(function(listen){
+  util.log("Starting *secure* reverse proxy server on port '" + listen.ip+':'+listen.port);
+  var options = {
+    cert: listen.cert,
+    key: listen.key,
+    ca: listen.ca
+  }
+  https.createServer(options, server_cb).listen(listen.port, listen.ip); 
 });
 
