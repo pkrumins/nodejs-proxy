@@ -14,7 +14,7 @@ var config = {
   black_list:    './config/black_list',
   host_filters:   './config/hostfilters.js',
   listen:[{ip:'0.0.0.0', port:80},//all ipv4 interfaces
-          {ip:'::', port:80}]//all ipv6 interfaces
+          {ip:'::', port:80}],//all ipv6 interfaces
   listen_ssl:[{
               ip:'0.0.0.0',//all *secure* ipv4 interfaces
               port:443,
