@@ -7,8 +7,8 @@
 */
 
 var http = require('http'),
-    https = require('https');
-    util = require('util');
+    https = require('https'),
+    util = require('util'),
     fs   = require('fs'),
     config = require('./config').config,
     blacklist = [],
